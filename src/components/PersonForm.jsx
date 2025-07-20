@@ -1,135 +1,100 @@
 import { useEffect, useState } from 'react';
-import { addPerson, getAllPersons } from '../services/personService';
 import { supabase } from '../supabaseClient';
 
-function PersonForm({ onPersonAdded }) {
-  const [formData, setFormData] = useState({
-    full_name: '',
-    birth_date: '',
-    death_date: '',
-    notes: '',
-    parents: [],
-  });
+export default function PersonForm({ onPersonAdded }) {
+  const [fullName, setFullName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [deathDate, setDeathDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [parentId, setParentId] = useState('');
   const [people, setPeople] = useState([]);
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    async function loadPeople() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const res = await getAllPersons(user.id);
-        setPeople(res || []);
-      }
-    }
-
-    loadPeople();
+    const fetchPeople = async () => {
+      const { data } = await supabase.from('persons').select('*');
+      setPeople(data || []);
+    };
+    fetchPeople();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const handleAdd = async () => {
+    if (!fullName) return;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    const { data: newPerson, error } = await supabase
+      .from('persons')
+      .insert([{ full_name: fullName, birth_date: birthDate, death_date: deathDate, notes }])
+      .select()
+      .single();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const person = {
-      full_name: formData.full_name,
-      birth_date: formData.birth_date || null,
-      death_date: formData.death_date || null,
-      notes: formData.notes,
-      user_id: user.id,
-    };
-
-    const result = await addPerson(person, formData.parents);
-
-    if (result) {
-      setSuccess(true);
-      setFormData({
-        full_name: '',
-        birth_date: '',
-        death_date: '',
-        notes: '',
-        parents: [],
-      });
-      onPersonAdded?.();
-
-      setTimeout(() => setSuccess(false), 2500);
+    if (parentId && newPerson) {
+      await supabase
+        .from('relationships')
+        .insert([{ parent_id: parentId, child_id: newPerson.id }]);
     }
+
+    // Clear form
+    setFullName('');
+    setBirthDate('');
+    setDeathDate('');
+    setNotes('');
+    setParentId('');
+
+    // Trigger refresh
+    if (onPersonAdded) onPersonAdded();
   };
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-4 text-center">Add Person</h2>
-      {success && (
-        <div className="bg-green-100 text-green-800 text-sm px-4 py-2 mb-3 rounded">
-          ✅ Person added successfully!
-        </div>
-      )}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          name="full_name"
-          value={formData.full_name}
-          onChange={handleChange}
-          required
-          placeholder="Full name"
-          className="w-full p-2 border rounded focus:outline-none focus:ring"
-        />
-        <input
-          name="birth_date"
-          type="date"
-          value={formData.birth_date}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
-        <input
-          name="death_date"
-          type="date"
-          value={formData.death_date}
-          onChange={handleChange}
-          className="w-full p-2 border rounded"
-        />
-        <textarea
-          name="notes"
-          value={formData.notes}
-          onChange={handleChange}
-          placeholder="Notes"
-          rows={3}
-          className="w-full p-2 border rounded"
-        />
+    <div className="bg-white p-6 rounded shadow max-w-md mx-auto my-8">
+      <h2 className="text-2xl font-bold mb-4 text-center">Add Person</h2>
 
-        <select
-          name="parents"
-          multiple
-          value={formData.parents}
-          onChange={(e) =>
-            setFormData({ ...formData, parents: [...e.target.selectedOptions].map(o => o.value) })
-          }
-          className="w-full p-2 border rounded"
-        >
-          <option disabled value="">-- Select parent(s) --</option>
-          {people.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.full_name}
-            </option>
-          ))}
-        </select>
+      <input
+        type="text"
+        className="w-full p-2 mb-2 border rounded"
+        placeholder="Full name"
+        value={fullName}
+        onChange={(e) => setFullName(e.target.value)}
+      />
 
-        <button
-          type="submit"
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded"
-        >
-          ➕ Add Person
-        </button>
-      </form>
+      <input
+        type="date"
+        className="w-full p-2 mb-2 border rounded"
+        value={birthDate}
+        onChange={(e) => setBirthDate(e.target.value)}
+      />
+
+      <input
+        type="date"
+        className="w-full p-2 mb-2 border rounded"
+        value={deathDate}
+        onChange={(e) => setDeathDate(e.target.value)}
+      />
+
+      <textarea
+        className="w-full p-2 mb-2 border rounded"
+        placeholder="Notes"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+      />
+
+      <select
+        className="w-full p-2 mb-4 border rounded"
+        value={parentId}
+        onChange={(e) => setParentId(e.target.value)}
+      >
+        <option value="">Select parent (optional)</option>
+        {people.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.full_name}
+          </option>
+        ))}
+      </select>
+
+      <button
+        onClick={handleAdd}
+        className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
+      >
+        ➕ Add Person
+      </button>
     </div>
   );
 }
-
-export default PersonForm;
