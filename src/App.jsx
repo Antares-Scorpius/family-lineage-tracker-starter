@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import PersonForm from './components/PersonForm';
 import FamilyTree from './components/FamilyTree';
+import RelationshipEditor from './components/RelationshipEditor';
 
 function App() {
   const [refreshCounter, setRefreshCounter] = useState(0);
@@ -23,9 +24,10 @@ function App() {
           <PersonForm onPersonAdded={triggerRefresh} />
         </section>
 
-        {/* Tree Section */}
-        <section className="w-full md:w-2/3 p-4 bg-gray-50 overflow-auto">
+        {/* Tree + Relationship Editor Section */}
+        <section className="w-full md:w-2/3 p-4 bg-gray-50 overflow-auto space-y-6">
           <FamilyTree refresh={refreshCounter} />
+          <RelationshipEditor onUpdated={triggerRefresh} />
         </section>
       </main>
 
