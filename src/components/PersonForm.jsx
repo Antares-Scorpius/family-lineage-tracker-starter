@@ -7,16 +7,16 @@ export default function PersonForm({ onPersonAdded }) {
   const [deathDate, setDeathDate] = useState('');
   const [notes, setNotes] = useState('');
   const [parentId, setParentId] = useState('');
+  const [relationType, setRelationType] = useState('');
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Fetch people from Supabase to populate dropdown
   useEffect(() => {
     const fetchPeople = async () => {
       const { data, error } = await supabase.from('persons').select('*');
-      if (error) {
-        console.error('Failed to fetch persons:', error.message);
-      }
+      if (error) console.error('Fetch error:', error.message);
       setPeople(data || []);
     };
     fetchPeople();
@@ -31,11 +31,24 @@ export default function PersonForm({ onPersonAdded }) {
     setLoading(true);
     setError('');
 
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const user = authData?.user;
+    console.log("🧑 Logged-in User ID:", user?.id);
+
+    if (!user) {
+      setError('You must be logged in to add a person.');
+      setLoading(false);
+      return;
+    }
+
+    console.log('🧑 Logged-in User ID:', user.id);
+
     const insertPayload = {
       full_name: fullName.trim(),
       birth_date: birthDate || null,
       death_date: deathDate || null,
       notes: notes || null,
+      user_id: user.id,
     };
 
     const { data: newPerson, error: personErr } = await supabase
@@ -51,10 +64,15 @@ export default function PersonForm({ onPersonAdded }) {
       return;
     }
 
+    // Insert relationship if selected
     if (parentId && newPerson) {
-      const { error: relErr } = await supabase
-        .from('relationships')
-        .insert([{ parent_id: parentId, child_id: newPerson.id }]);
+      const { error: relErr } = await supabase.from('relationships').insert([
+        {
+          parent_id: parentId,
+          child_id: newPerson.id,
+          relation: relationType || null,
+        },
+      ]);
 
       if (relErr) {
         console.error('RELATIONSHIP ERROR:', relErr.message);
@@ -64,15 +82,15 @@ export default function PersonForm({ onPersonAdded }) {
       }
     }
 
-    // Clear form
+    // Reset form
     setFullName('');
     setBirthDate('');
     setDeathDate('');
     setNotes('');
     setParentId('');
+    setRelationType('');
     setLoading(false);
 
-    // Refresh tree
     if (onPersonAdded) onPersonAdded();
   };
 
@@ -112,11 +130,11 @@ export default function PersonForm({ onPersonAdded }) {
       />
 
       <select
-        className="w-full p-2 mb-4 border rounded"
+        className="w-full p-2 mb-2 border rounded"
         value={parentId}
         onChange={(e) => setParentId(e.target.value)}
       >
-        <option value="">Select parent (optional)</option>
+        <option value="">Select parent/spouse (optional)</option>
         {people.map((p) => (
           <option key={p.id} value={p.id}>
             {p.full_name}
@@ -124,10 +142,23 @@ export default function PersonForm({ onPersonAdded }) {
         ))}
       </select>
 
+      <select
+        className="w-full p-2 mb-4 border rounded"
+        value={relationType}
+        onChange={(e) => setRelationType(e.target.value)}
+      >
+        <option value="">Select relationship</option>
+        <option value="mother">Mother</option>
+        <option value="father">Father</option>
+        <option value="wife">Wife</option>
+        <option value="husband">Husband</option>
+        <option value="guardian">Guardian</option>
+      </select>
+
       <button
         onClick={handleAdd}
         disabled={loading}
-        className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700 transition-colors"
+        className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
       >
         {loading ? 'Adding...' : 'Add Person'}
       </button>

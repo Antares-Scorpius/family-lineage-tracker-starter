@@ -7,13 +7,24 @@ export default function FamilyTree({ refresh }) {
 
   useEffect(() => {
     const loadTreeData = async () => {
-      const { data: persons, error: err1 } = await supabase.from('persons').select('*');
-      const { data: relationships, error: err2 } = await supabase.from('relationships').select('*');
-      if (err1 || err2 || !persons || !relationships) return;
+      const { data: persons, error: personErr } = await supabase
+        .from('persons')
+        .select('*');
 
+      const { data: relationships, error: relErr } = await supabase
+        .from('relationships')
+        .select('*');
+
+      if (personErr || relErr || !persons || !relationships) {
+        console.error('Error loading data:', personErr || relErr);
+        return;
+      }
+
+      // Create map of people
       const peopleMap = {};
       persons.forEach((p) => {
         peopleMap[p.id] = {
+          id: p.id,
           name: p.full_name,
           attributes: {
             birth: p.birth_date || '',
@@ -23,36 +34,45 @@ export default function FamilyTree({ refresh }) {
         };
       });
 
+      // Add children with relation label
       relationships.forEach((rel) => {
-        if (peopleMap[rel.parent_id] && peopleMap[rel.child_id]) {
-          peopleMap[rel.parent_id].children.push(peopleMap[rel.child_id]);
+        const parent = peopleMap[rel.parent_id];
+        const child = peopleMap[rel.child_id];
+        if (parent && child) {
+          const labeledChild = {
+            ...child,
+            name: `${child.name}${rel.relation ? ` (${rel.relation})` : ''}`,
+          };
+          parent.children.push(labeledChild);
         }
       });
 
+      // Find root nodes (not listed as child)
       const allChildIds = new Set(relationships.map((r) => r.child_id));
-      const roots = persons
+      const rootNodes = persons
         .filter((p) => !allChildIds.has(p.id))
         .map((p) => peopleMap[p.id]);
 
-      setTreeData(roots.length > 0 ? roots : null);
+      setTreeData(rootNodes.length > 0 ? rootNodes : null);
     };
 
-    const timeout = setTimeout(() => loadTreeData(), 500);
-    return () => clearTimeout(timeout);
+    loadTreeData();
   }, [refresh]);
 
   return (
-    <div className="w-full h-[80vh] md:h-full overflow-auto border rounded shadow bg-gray-50">
+    <div className="w-full h-[90vh] bg-gray-100 rounded shadow-inner p-2 overflow-auto">
       {treeData ? (
         <Tree
           data={treeData}
           orientation="vertical"
-          translate={{ x: 400, y: 100 }}
+          translate={{ x: 600, y: 100 }}
           pathFunc="step"
-          zoomable
+          collapsible={true}
+          zoomable={true}
+          separation={{ siblings: 1.5, nonSiblings: 2 }}
         />
       ) : (
-        <p className="text-center text-gray-500 p-4">No tree data found</p>
+        <p className="text-center text-gray-500 mt-10">No tree data found.</p>
       )}
     </div>
   );
